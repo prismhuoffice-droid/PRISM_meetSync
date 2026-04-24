@@ -810,7 +810,8 @@ function showTemplateSelectionDialog(templates){
 function selectTemplateForMeeting(tid){var ts=window._tmpTemplates||[];var t=ts.filter(function(x){return x.id===tid;})[0];closeOverlay('tmpl-select-overlay');if(t)showMeetingOverrideForm(t);}
 
 function showMeetingOverrideForm(tmpl){
-  var vips=JSON.parse(tmpl.vip_list||'[]');var voters=JSON.parse(tmpl.voter_list||'[]');
+  var vips=Array.isArray(tmpl.vip_list)?tmpl.vip_list:(typeof tmpl.vip_list==='string'?JSON.parse(tmpl.vip_list||'[]'):[]);
+  var voters=Array.isArray(tmpl.voter_list)?tmpl.voter_list:(typeof tmpl.voter_list==='string'?JSON.parse(tmpl.voter_list||'[]'):[]);
   var ov=document.createElement('div');ov.className='tmpl-overlay';ov.id='meeting-override-overlay';
   var h='<div class="tmpl-modal" style="max-height:85vh;overflow-y:auto"><h2>新しい会議を作成</h2><p class="text-sm text-muted" style="margin-bottom:14px">テンプレート「'+esc(tmpl.name)+'」をベースに作成します。必要に応じて変更してください。</p>';
   h+='<div class="form-row"><label>会議名</label><input type="text" id="mo-title" value="'+esc(tmpl.default_title||'')+'"></div>';
