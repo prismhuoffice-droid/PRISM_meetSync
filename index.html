@@ -62,6 +62,12 @@ header h1{font-size:1rem;font-weight:700;margin-top:2px}
 .cal-slot.cal-prev:hover{background:#bbf7d0}
 .cal-slot.cal-prev.cal-selected{background:#4ade80;border-color:#22c55e}
 .cal-slot.cal-disabled{background:#f9fafb;cursor:not-allowed;opacity:.5;pointer-events:none}
+.cal-slot.cal-vip1{background:#dcfce7;border-color:#86efac}
+.cal-slot.cal-vip2{background:#dbeafe;border-color:#93c5fd}
+.cal-slot.cal-vip3{background:#fef3c7;border-color:#fcd34d}
+.cal-slot.cal-overlap{background:#c084fc;border-color:#a855f7}
+.pub-cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0;font-size:.8rem;color:var(--gray)}
+.pub-cal-legend .lcl-box{width:18px;height:18px;border-radius:4px;border:1px solid var(--border);display:inline-block;vertical-align:middle;margin-right:4px}
 .cal-legend{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0}
 .legend-item{display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--gray)}
 .legend-box{width:16px;height:16px;border-radius:3px;border:1px solid var(--border)}
@@ -257,6 +263,7 @@ hr.divider{border:none;border-top:1px solid var(--border);margin:18px 0}
       <div id="s-message" class="info-box info-box-blue" style="margin-top:18px"></div>
       <div id="s-confirmed"></div>
       <div id="s-stats"></div>
+      <div id="s-vip-calendar"></div>
       <p class="text-sm text-muted" style="margin-top:14px">回答専用URLはメールでご案内しています。</p>
     </div>
   </div>
@@ -422,6 +429,13 @@ var ADMIN_TOKEN = URL_PARAMS.get('admin') || '';
 var MEETING_ID  = URL_PARAMS.get('m')     || '';
 var API_URL     = '';
 
+/* 管理者トークンをURLバーから除去（ブラウザ履歴への漏洩防止） */
+if (ADMIN_TOKEN && window.history && window.history.replaceState) {
+  var cleanUrl = window.location.href.replace(/([?&])admin=[^&]*(&|$)/, function(m,p1,p2){ return p2 ? p1 : ''; });
+  if (cleanUrl.endsWith('?')) cleanUrl = cleanUrl.slice(0, -1);
+  window.history.replaceState(null, '', cleanUrl);
+}
+
 var gAdminData         = null;
 var gAdminMeetings     = [];
 var gCurrentMeetingId  = '';
@@ -448,7 +462,7 @@ var gWizardStep        = 1;
 function buildDynamicStepLabels(vipCount, vipNames, month) {
   var labels = [(month ? month + '\u6708\u306e\u8abf\u6574\u958b\u59cb' : '\u8abf\u6574\u958b\u59cb')];
   for (var i = 0; i < vipCount; i++) labels.push((vipNames[i] || 'VIP' + (i + 1)) + '\n\u8abf\u6574\u4e2d');
-  labels.push('\u5019\u88dc\u78ba\u5b9a', '\u51fa\u6b20\u78ba\u8a8d', '\u65e5\u7a0b\u78ba\u5b9a', '\u30ea\u30de\u30a4\u30f3\u30c9', '\u5f53\u65e5');
+  labels.push('\u5019\u88dc\u78ba\u5b9a', '\u51fa\u6b20\u78ba\u8a8d', '\u65e5\u7a0b\u78ba\u5b9a', '\u5f53\u65e5');
   return labels;
 }
 function buildDynamicStatusToStep(vipCount) {
@@ -557,8 +571,48 @@ function renderStatus(data){
   else el('s-confirmed').innerHTML='';
   if(data.status==='voting'&&data.total>0){var pct=Math.round(data.responded/data.total*100);el('s-stats').innerHTML='<div class="stats"><div class="stat-card"><div class="stat-num">'+data.responded+'/'+data.total+'</div><div class="stat-label">\u56de\u7b54\u6e08\u307f</div></div></div><div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%"></div></div><p class="text-sm text-muted">'+pct+'% \u56de\u7b54\u6e08\u307f</p>';}
   else el('s-stats').innerHTML='';
+  /* VIP候補カレンダー表示 */
+  renderPublicVipCalendar(data);
   if(gPublicCameFromList)show('s-backwrap');else hide('s-backwrap');
   hide('v-status-list');show('v-status');
+  /* 公開ポータルの自動更新（60秒ごと） */
+  if(data.mode==='single'&&!gPublicPollTimer){
+    gPublicPollTimer=setInterval(function(){
+      api('getPublicStatus',[data.meetingId]).then(function(r){var d2=unwrap(r);if(d2&&d2.ok)renderStatus(d2);}).catch(function(){});
+    },60000);
+  }
+}
+var gPublicPollTimer=null;
+
+function renderPublicVipCalendar(data){
+  var wrap=el('s-vip-calendar');if(!wrap)return;
+  var vc=parseInt(data.vipCount||'0',10);
+  var vipInfo=data.vipInfo||[];
+  var cal=data.calConfig;
+  if(vc===0||!cal||!cal.start||!cal.end||vipInfo.length===0){wrap.textContent='';return;}
+  var anyResp=vipInfo.some(function(v){return v.responded&&v.slots.length>0;});
+  if(!anyResp){wrap.textContent='';return;}
+  var days=getWeekdays(cal.start,cal.end);
+  var hours=getHours(cal.startHour,cal.endHour);
+  if(days.length===0||hours.length===0){wrap.textContent='';return;}
+  var slotMap={};
+  var VIP_COLORS=['cal-vip1','cal-vip2','cal-vip3'];
+  vipInfo.forEach(function(v){(v.slots||[]).forEach(function(iso){if(!slotMap[iso])slotMap[iso]=[];slotMap[iso].push(v.vipNum);});});
+  var JP=['日','月','火','水','木','金','土'];
+  var h='<div style="margin-top:24px"><div class="section-title">候補日時の状況</div>';
+  h+='<div class="pub-cal-legend">';
+  vipInfo.forEach(function(v,i){if(!v.responded)return;h+='<span><span class="lcl-box '+VIP_COLORS[i%3]+'"></span>'+esc(v.name)+'</span>';});
+  if(vc>=2)h+='<span><span class="lcl-box cal-overlap"></span>全員一致</span>';
+  h+='</div>';
+  h+='<div class="cal-wrap"><table class="cal-table"><thead><tr><th class="cal-time-th"></th>';
+  days.forEach(function(d){h+='<th class="cal-day-th">'+(d.getMonth()+1)+'/'+d.getDate()+'<br>('+JP[d.getDay()]+')</th>';});
+  h+='</tr></thead><tbody>';
+  hours.forEach(function(hour){h+='<tr><td class="cal-time-td">'+pad2(hour)+':00</td>';days.forEach(function(d){var iso=toIso(d,hour);var vips=slotMap[iso]||[];var cls='cal-slot';if(vips.length>=2)cls+=' cal-overlap';else if(vips.length===1)cls+=' '+(VIP_COLORS[(vips[0]-1)%3]);h+='<td class="'+cls+'" style="cursor:default"></td>';});h+='</tr>';});
+  h+='</tbody></table></div>';
+  h+='<div style="margin-top:10px">';
+  vipInfo.forEach(function(v){var ok=v.responded;h+='<p class="text-sm" style="margin:4px 0"><span style="color:'+(ok?'var(--green)':'var(--gray)')+'">'+(ok?'✓':'…')+'</span> '+esc(v.name)+'：'+(ok?v.slots.length+'枠 選択済み':'回答待ち')+'</p>';});
+  h+='</div></div>';
+  wrap.innerHTML=h;
 }
 function renderPublicList(list){
   var allC=list.length>0&&list.every(function(m){return m.status==='confirmed'||m.status==='today';});
@@ -781,7 +835,7 @@ function renderVipTabs(data){
 function renderStepGuide(status,vipCount,vipNames){
   vipCount=vipCount||0;vipNames=vipNames||[];
   var labels=['\u6e96\u5099'];for(var i=0;i<vipCount;i++)labels.push(vipNames[i]||'VIP'+(i+1));
-  labels.push('\u5019\u88dc\u78ba\u5b9a','\u51fa\u6b20\u9001\u4fe1','\u65e5\u7a0b\u78ba\u5b9a','\u30ea\u30de\u30a4\u30f3\u30c9','\u5f53\u65e5');
+  labels.push('\u5019\u88dc\u78ba\u5b9a','\u51fa\u6b20\u9001\u4fe1','\u65e5\u7a0b\u78ba\u5b9a','\u5f53\u65e5');
   var sm=buildDynamicStatusToStep(vipCount);var cur=sm[status]||0;
   el('a-step-guide').innerHTML=labels.map(function(l,i){var cls=i<cur?'done':i===cur?'active':'';return'<div class="sg-item '+cls+'"><div class="sg-num">'+(i<cur?'\u2713':(i+1))+'</div><div class="sg-label">'+esc(l)+'</div></div>';}).join('');
 }
