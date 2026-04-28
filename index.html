@@ -67,8 +67,11 @@ header h1{font-size:1rem;font-weight:700;margin-top:2px}
 .cal-slot.cal-vip2{background:#dbeafe;border-color:#93c5fd}
 .cal-slot.cal-vip3{background:#fef3c7;border-color:#fcd34d}
 .cal-slot.cal-overlap{background:#c084fc;border-color:#a855f7}
-.pub-cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0;font-size:.8rem;color:var(--gray)}
-.pub-cal-legend .lcl-box{width:18px;height:18px;border-radius:4px;border:1px solid var(--border);display:inline-block;vertical-align:middle;margin-right:4px}
+.pub-cal-legend{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0;font-size:.82rem;color:var(--gray);align-items:center}
+.pub-cal-legend .lcl-dot{width:12px;height:12px;border-radius:50%;display:inline-block;vertical-align:middle;margin-right:5px}
+.cal-scroll-hint{position:relative}
+.cal-scroll-hint::after{content:'→';position:absolute;right:0;top:50%;transform:translateY(-50%);background:linear-gradient(to right,transparent,var(--gray-lt) 40%);padding:8px 8px 8px 24px;color:var(--gray);font-size:1.1rem;pointer-events:none}
+.cal-scroll-hint.scrolled-end::after{display:none}
 .cal-legend{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0}
 .legend-item{display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--gray)}
 .legend-box{width:16px;height:16px;border-radius:3px;border:1px solid var(--border)}
@@ -534,6 +537,7 @@ function setHeaderMode_(mode){
   else if(mode==='participant'){if(t)t.textContent='MeetSync';document.title='MeetSync';}
   else{if(t)t.textContent='MeetSync 共通ポータル';document.title='MeetSync';}
 }
+function checkCalScroll(){var w=el('pub-cal-wrap');var h=el('pub-cal-hint');var m=el('pub-cal-scroll-msg');if(!w||!h)return;var atEnd=w.scrollLeft+w.clientWidth>=w.scrollWidth-5;if(atEnd){h.classList.add('scrolled-end');if(m)m.style.display='none';}else{h.classList.remove('scrolled-end');if(m)m.style.display='';}}
 /** 名前に敬称を付与する（例: 田中 → 田中 先生） */
 function honorific(name){return name+(gGreeting?' '+gGreeting:'');}
 function showError(err){hideLoading();setText('err-msg',typeof err==='string'?err:((err&&err.message)||'\u30a8\u30e9\u30fc\u304c\u767a\u751f\u3057\u307e\u3057\u305f'));show('v-error');}
@@ -613,18 +617,20 @@ function renderPublicVipCalendar(data){
   var JP=['日','月','火','水','木','金','土'];
   var h='<div style="margin-top:24px"><div class="section-title">候補日時の状況</div>';
   h+='<div class="pub-cal-legend">';
-  vipInfo.forEach(function(v,i){if(!v.responded)return;h+='<span><span class="lcl-box '+VIP_COLORS[i%3]+'"></span>'+esc(honorific(v.name))+'</span>';});
-  if(vc>=2)h+='<span><span class="lcl-box cal-overlap"></span>全員一致</span>';
+  vipInfo.forEach(function(v,i){if(!v.responded)return;h+='<span><span class="lcl-dot '+VIP_COLORS[i%3]+'"></span>'+esc(honorific(v.name))+'</span>';});
+  if(vc>=2)h+='<span><span class="lcl-dot cal-overlap"></span>全員一致</span>';
   h+='</div>';
-  h+='<div class="cal-wrap"><table class="cal-table"><thead><tr><th class="cal-time-th"></th>';
+  h+='<div class="cal-scroll-hint" id="pub-cal-hint"><div class="cal-wrap" id="pub-cal-wrap" onscroll="checkCalScroll()"><table class="cal-table"><thead><tr><th class="cal-time-th"></th>';
   days.forEach(function(d){h+='<th class="cal-day-th">'+(d.getMonth()+1)+'/'+d.getDate()+'<br>('+JP[d.getDay()]+')</th>';});
   h+='</tr></thead><tbody>';
   hours.forEach(function(hour){h+='<tr><td class="cal-time-td">'+pad2(hour)+':00</td>';days.forEach(function(d){var iso=toIso(d,hour);var vips=slotMap[iso]||[];var cls='cal-slot';if(vips.length>=2)cls+=' cal-overlap';else if(vips.length===1)cls+=' '+(VIP_COLORS[(vips[0]-1)%3]);h+='<td class="'+cls+'" style="cursor:default"></td>';});h+='</tr>';});
-  h+='</tbody></table></div>';
+  h+='</tbody></table></div></div>';
+  h+='<p class="text-sm text-muted" id="pub-cal-scroll-msg" style="margin:4px 0">← 横にスクロールできます →</p>';
   h+='<div style="margin-top:10px">';
   vipInfo.forEach(function(v){var ok=v.responded;h+='<p class="text-sm" style="margin:4px 0"><span style="color:'+(ok?'var(--green)':'var(--gray)')+'">'+(ok?'✓':'…')+'</span> '+esc(honorific(v.name))+'：'+(ok?v.slots.length+'枠 選択済み':'回答待ち')+'</p>';});
   h+='</div></div>';
   wrap.innerHTML=h;
+  setTimeout(function(){var w=el('pub-cal-wrap');if(w&&w.scrollWidth<=w.clientWidth){var hi=el('pub-cal-hint');if(hi)hi.classList.add('scrolled-end');var ms=el('pub-cal-scroll-msg');if(ms)ms.style.display='none';}},100);
 }
 function renderPublicList(list){
   var allC=list.length>0&&list.every(function(m){return m.status==='confirmed'||m.status==='today';});
