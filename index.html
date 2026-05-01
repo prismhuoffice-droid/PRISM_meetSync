@@ -694,7 +694,8 @@ function renderCalendarView(data){
         setText('cal-inst-body',instBody);
         el('cal-legend').innerHTML='';
         var slotsToShow=data.allowedSlots||data.prevVipSlots||[];
-        el('cal-grid-wrap').innerHTML=buildChecklistView(slotsToShow,gCalSlots);
+        var emptyMsg='指定された条件で選択可能な日程がまだ作成されていません。担当者に確認してください。';
+        el('cal-grid-wrap').innerHTML=buildChecklistView(slotsToShow,gCalSlots,emptyMsg);
       }
     }
     updateCalCount();
@@ -702,8 +703,8 @@ function renderCalendarView(data){
   }
   show('v-calendar');
 }
-function buildChecklistView(prevSlots,selected){
-  if(!prevSlots||prevSlots.length===0)return'<p class="text-muted">\u524d\u306e\u65b9\u306e\u5165\u529b\u304c\u307e\u3060\u3042\u308a\u307e\u305b\u3093\u3002</p>';
+function buildChecklistView(prevSlots,selected,emptyMsg){
+  if(!prevSlots||prevSlots.length===0)return'<p class="text-muted">'+esc(emptyMsg||'\u524d\u306e\u65b9\u306e\u5165\u529b\u304c\u307e\u3060\u3042\u308a\u307e\u305b\u3093\u3002')+'</p>';
   var sorted=prevSlots.slice().sort();var h='<div class="hslot-list">';
   sorted.forEach(function(iso){var isOk=selected.indexOf(iso)>=0;h+='<div class="hslot-item '+(isOk?'ok':'ng')+'" data-iso="'+esc(iso)+'" onclick="toggleChecklistSlot(this)"><span class="hslot-check">'+(isOk?'\u2713':'\u00d7')+'</span><span class="hslot-label">'+esc(isoToJp(iso))+'</span></div>';});
   return h+'</div>';
