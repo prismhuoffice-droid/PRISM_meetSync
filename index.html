@@ -429,15 +429,34 @@ hr.divider{border:none;border-top:1px solid var(--border);margin:18px 0}
 var URL_PARAMS  = new URLSearchParams(window.location.search);
 var ORG_CODE    = URL_PARAMS.get('org') || '';
 var TOKEN       = URL_PARAMS.get('token') || '';
-var ADMIN_TOKEN = URL_PARAMS.get('admin') || '';
 var MEETING_ID  = URL_PARAMS.get('m')     || '';
+var VIEW_MODE   = URL_PARAMS.get('view')  || '';
 var API_URL     = '';
+var RAW_ADMIN_TOKEN = URL_PARAMS.get('admin') || '';
+var ADMIN_SESSION_KEY = 'meetsync_admin_token:' + (ORG_CODE || 'default');
+var ADMIN_TOKEN = RAW_ADMIN_TOKEN;
+
+try {
+  if (!TOKEN && !ADMIN_TOKEN && window.sessionStorage) {
+    ADMIN_TOKEN = window.sessionStorage.getItem(ADMIN_SESSION_KEY) || '';
+  }
+  if (ADMIN_TOKEN && window.sessionStorage) {
+    window.sessionStorage.setItem(ADMIN_SESSION_KEY, ADMIN_TOKEN);
+  }
+} catch (_) { /* non-fatal */ }
+
+function buildCurrentUrlWithoutSecret_(viewMode) {
+  var params = [];
+  if (ORG_CODE) params.push('org=' + encodeURIComponent(ORG_CODE));
+  if (MEETING_ID) params.push('m=' + encodeURIComponent(MEETING_ID));
+  if (TOKEN) params.push('token=' + encodeURIComponent(TOKEN));
+  if (viewMode) params.push('view=' + encodeURIComponent(viewMode));
+  return window.location.pathname + (params.length ? '?' + params.join('&') : '');
+}
 
 /* 管理者トークンをURLバーから除去（ブラウザ履歴への漏洩防止） */
-if (ADMIN_TOKEN && window.history && window.history.replaceState) {
-  var cleanUrl = window.location.href.replace(/([?&])admin=[^&]*(&|$)/, function(m,p1,p2){ return p2 ? p1 : ''; });
-  if (cleanUrl.endsWith('?')) cleanUrl = cleanUrl.slice(0, -1);
-  window.history.replaceState(null, '', cleanUrl);
+if (RAW_ADMIN_TOKEN && window.history && window.history.replaceState) {
+  window.history.replaceState(null, '', buildCurrentUrlWithoutSecret_('admin'));
 }
 
 var gGreeting          = '';  /* 敬称（先生/様/さん等） */
